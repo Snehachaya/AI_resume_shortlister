@@ -8,16 +8,21 @@ import docx
 st.set_page_config(page_title="Resume Shortlister", layout="wide")
 
 # -------------------- SUPABASE --------------------
-SUPABASE_URL = st.secrets["https://ulvluajiaaebnjxicpiy.supabase.co"]
-SUPABASE_KEY = st.secrets["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsdmx1YWppYWFlYm5qeGljcGl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDM2MzIsImV4cCI6MjA5MDcxOTYzMn0.c_r0ECdOcwUwfv20pyG7LFNS4wwNWAx0Ods3zK52QRA"]
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # -------------------- AUTH FUNCTIONS --------------------
 def signup(email, password):
     try:
-        return supabase.auth.sign_up({"email": email, "password": password})
-    except:
+        response = supabase.auth.sign_up({
+            "email": email,
+            "password": password
+        })
+        return response
+    except Exception as e:
+        st.error(f"Error: {e}")
         return None
 
 def login(email, password):
@@ -57,11 +62,11 @@ if not st.session_state.user:
 
         if st.button("Signup"):
             res = signup(email, password)
-            if res:
+
+            if res and res.user:
                 st.success("Account created! Please login.")
             else:
-                st.error("Signup failed")
-
+                st.error("Signup failed. Check details or email may already exist.")
     st.stop()
 
 # -------------------- LOGOUT --------------------
