@@ -34,6 +34,10 @@ resumes = st.file_uploader(
     type=["pdf", "docx"],
     accept_multiple_files=True
 )
+# Handle mobile (single file fallback)
+if resumes:
+    if not isinstance(resumes, list):
+        resumes = [resumes]  # convert to list
 
 # Button
 if st.button("Analyze"):
