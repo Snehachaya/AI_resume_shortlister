@@ -56,6 +56,7 @@ if not st.session_state.user:
             else:
                 st.error("Invalid credentials")
 
+
     elif choice == "Signup":
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
