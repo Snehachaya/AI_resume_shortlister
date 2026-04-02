@@ -1,16 +1,84 @@
 import streamlit as st
+from supabase import create_client
 from sentence_transformers import SentenceTransformer, util
 import pdfplumber
 import docx
 
-# Load model (same as your Flask code)
+# -------------------- CONFIG --------------------
+st.set_page_config(page_title="Resume Shortlister", layout="wide")
+
+# -------------------- SUPABASE --------------------
+SUPABASE_URL = st.secrets["https://ulvluajiaaebnjxicpiy.supabase.co"]
+SUPABASE_KEY = st.secrets["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsdmx1YWppYWFlYm5qeGljcGl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDM2MzIsImV4cCI6MjA5MDcxOTYzMn0.c_r0ECdOcwUwfv20pyG7LFNS4wwNWAx0Ods3zK52QRA"]
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# -------------------- AUTH FUNCTIONS --------------------
+def signup(email, password):
+    try:
+        return supabase.auth.sign_up({"email": email, "password": password})
+    except:
+        return None
+
+def login(email, password):
+    try:
+        return supabase.auth.sign_in_with_password({"email": email, "password": password})
+    except:
+        return None
+
+# -------------------- SESSION --------------------
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# -------------------- LOGIN UI --------------------
+menu = ["Login", "Signup"]
+choice = st.sidebar.selectbox("Menu", menu)
+
+if not st.session_state.user:
+
+    st.title("🔐 Resume Shortlister Login")
+
+    if choice == "Login":
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+
+        if st.button("Login"):
+            res = login(email, password)
+            if res and res.user:
+                st.session_state.user = res.user
+                st.success("Logged in successfully!")
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
+
+    elif choice == "Signup":
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+
+        if st.button("Signup"):
+            res = signup(email, password)
+            if res:
+                st.success("Account created! Please login.")
+            else:
+                st.error("Signup failed")
+
+    st.stop()
+
+# -------------------- LOGOUT --------------------
+st.sidebar.write(f"👤 {st.session_state.user.email}")
+
+if st.sidebar.button("Logout"):
+    st.session_state.user = None
+    st.rerun()
+
+# -------------------- MODEL --------------------
 @st.cache_resource
 def get_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
 model = get_model()
 
-# Same text extraction logic
+# -------------------- FILE TEXT EXTRACTION --------------------
 def extract_text(file):
     if file.name.endswith('.pdf'):
         with pdfplumber.open(file) as pdf:
@@ -20,57 +88,57 @@ def extract_text(file):
         return " ".join([para.text for para in doc.paragraphs])
     return ""
 
-# UI
-st.set_page_config(page_title="Resume Shortlister", layout="centered")
-
+# -------------------- MAIN APP --------------------
 st.title("📄 Resume Shortlister")
-st.write("Compare resumes with job description using AI")
+st.info("📱 Mobile users: upload one file at a time")
 
-# Inputs
 jd = st.text_area("Paste Job Description")
 
-resumes = st.file_uploader(
-    "Upload Resumes",
+uploaded_files = st.file_uploader(
+    "Upload Resumes (PDF/DOCX)",
     type=["pdf", "docx"],
     accept_multiple_files=True
 )
-# Handle mobile (single file fallback)
-if resumes:
-    if not isinstance(resumes, list):
-        resumes = [resumes]  # convert to list
 
-# Button
+# Mobile fix
+if uploaded_files and not isinstance(uploaded_files, list):
+    uploaded_files = [uploaded_files]
+
+# -------------------- ANALYZE --------------------
 if st.button("Analyze"):
-    if not jd or not resumes:
+    if not jd or not uploaded_files:
         st.warning("Please provide job description and upload resumes")
     else:
         with st.spinner("Analyzing resumes..."):
 
             jd_embedding = model.encode(jd, convert_to_tensor=True)
-
             results = []
 
-            for resume in resumes:
-                text = extract_text(resume)
+            for file in uploaded_files:
+                text = extract_text(file)
 
                 if not text.strip():
                     continue
 
                 resume_embedding = model.encode(text, convert_to_tensor=True)
-
                 score = util.pytorch_cos_sim(jd_embedding, resume_embedding).item()
 
                 results.append({
-                    "name": resume.name,
+                    "name": file.name,
                     "score": round(score * 100, 2)
                 })
 
             results.sort(key=lambda x: x['score'], reverse=True)
 
-        # Output
+        # -------------------- RESULTS --------------------
         st.subheader("📊 Results")
 
-        for r in results:
-            st.write(f"**{r['name']}** → {r['score']}%")
+        top = results[0]
+        st.success(f"🏆 Top Candidate: {top['name']} ({top['score']}%)")
 
         st.dataframe(results)
+
+        # Download CSV
+        import pandas as pd
+        df = pd.DataFrame(results)
+        st.download_button("📥 Download Results", df.to_csv(index=False), "results.csv")

@@ -3,3 +3,4 @@ sentence-transformers
 pdfplumber
 python-docx
 torch
+supabase
